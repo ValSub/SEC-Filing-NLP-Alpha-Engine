@@ -1,6 +1,6 @@
 # SEC Filing NLP Alpha Engine
 
-A research prototype that asks: **Can language extracted from SEC 10-K/10-Q filings using NLP help explain short-term stock returns?** This is a learning/research project, not a live trading system, and its own results are a documented null finding — see `main.tex` for the full write-up, including limitations.
+A research prototype that asks: **Can language extracted from SEC 10-K/10-Q filings using NLP help explain short-term stock returns?** This is a learning/research project, not a live trading system, and its own results are a documented null finding (see `main.tex` for the full write-up, including limitations).
 
 ## What's in this repo
 
