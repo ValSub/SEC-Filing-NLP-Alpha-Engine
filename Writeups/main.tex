@@ -1,0 +1,175 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float} % Required to enforce exact figure placement [H]
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[round]{natbib}
+\usepackage{setspace}
+\onehalfspacing
+
+\title{The SEC Filing NLP Alpha Engine: \\ Can Filing Language Predict Short-Term Stock Returns?}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent This paper tests whether features extracted from SEC 10-K and 10-Q filings using natural language processing help explain short-term stock returns. Filing sentiment is scored with FinBERT \citep{araci2019}, alongside a dictionary-based risk-language intensity measure and a vocabulary-novelty measure relative to each firm's prior filing. These features are related to five-day forward returns using a cross-sectional regression and a simple long-short portfolio sort across 230 filings from 19 large-capitalization U.S. stocks between 2020 and 2026. The regression explains essentially none of the cross-sectional variation in returns ($R^2 = 0.012$, no coefficient statistically distinguishable from zero), and the long-short portfolio backtest is based on only two tradable cross-sections and therefore cannot support any performance claim. The paper documents these limitations in detail, distinguishes a genuine null result from an implementation bug, and outlines the changes needed before the design could support a real inference.
+\end{abstract}
+
+\section{Introduction}
+
+Public companies are required to file periodic reports with the U.S. Securities and Exchange Commission (SEC): the annual 10-K and the quarterly 10-Q. These documents are text written by company management, and a growing literature in accounting and finance asks whether the tone, language, and structure of that text carries information about a firm's prospects beyond what is already reflected in the numbers \citep{loughranmcdonald2011}. If filing language systematically leads price discovery, a trading signal built from it should predict returns in the days immediately following the filing.
+
+This paper builds and tests such a signal. Three text-based features are constructed for each filing: a sentiment score from a transformer language model fine-tuned on financial text, a dictionary-based measure of risk-related language, and a novelty measure capturing how much a filing's vocabulary differs from the same firm's previous filing. These are combined into a composite signal and evaluated in two ways: a cross-sectional regression of forward returns on the text features, and a long-short portfolio that goes long the highest-signal filings and short the lowest-signal filings within each cross-section.
+
+The central finding is a well-documented null result, complicated by a sample-size limitation in the portfolio construction that is disclosed explicitly rather than smoothed over. The regression finds no statistically significant relationship between any text feature and five-day forward returns. The portfolio backtest, meanwhile, is not informative in either direction: the cross-sectional grouping rule used to form the long-short portfolio requires several filings on the exact same calendar date, a condition met on only two dates in the entire six-year sample. The resulting two-observation "backtest" is reported for completeness but should not be read as evidence about the strategy's viability.
+
+\section{Data}
+
+The sample covers 19 large-capitalization U.S. equities across technology, financials, energy, consumer staples, and healthcare (e.g. AAPL, MSFT, JPM, XOM, WMT, JNJ), chosen for reliable filing and price history rather than by any economic criterion. All 10-K and 10-Q filings between January 2020 and September 2026 are retrieved from SEC EDGAR, with filing text extracted from the primary HTML document and cleaned of markup. After dropping filings with insufficient text or missing return data, 230 filing-level observations remain.
+
+For each filing, the following features are constructed:
+\begin{itemize}
+\item \textbf{Sentiment score}: filings are split into sentences, up to 80 sentences are sampled per filing, and each is scored with FinBERT \citep{araci2019}, a BERT model fine-tuned on financial text. The filing-level score is the average of (positive probability $-$ negative probability) across sampled sentences.
+\item \textbf{Sentiment change}: the change in sentiment score from the same firm's immediately preceding filing.
+\item \textbf{Risk language}: occurrences per 1,000 words of a hand-built list of risk-related terms (e.g. \textit{risk}, \textit{litigation}, \textit{impairment}, \textit{going concern}), following the spirit of dictionary-based textual measures in \citet{loughranmcdonald2011}.
+\item \textbf{Novelty}: one minus the Jaccard similarity between the current and prior filing's vocabulary (words of four or more letters), where a higher value indicates a filing more different in wording from its predecessor.
+\item \textbf{Log word count}: included as a control for filing length.
+\end{itemize}
+
+The dependent variable is the five-day forward stock return, measured from the first trading day on or after the filing date to five trading days later, using adjusted close prices from Yahoo Finance.
+
+\section{Methodology}
+
+\subsection{Cross-sectional regression}
+
+The primary specification regresses five-day forward returns on the text features in a pooled cross-section:
+\begin{equation}
+ret5d_{i} = \alpha + \beta_1 \, sentiment_{i} + \beta_2 \, \Delta sentiment_{i} + \beta_3 \, novelty_{i} + \beta_4 \, risklang_{i} + \beta_5 \, \log(wordcount)_{i} + \varepsilon_i
+\end{equation}
+estimated by OLS with heteroskedasticity-robust (HC3) standard errors, appropriate given the well-documented non-normality and volatility clustering of short-horizon equity returns.
+
+\subsection{Composite signal and long-short portfolio}
+
+Each feature is standardized to a z-score over the sample and combined into a composite \textit{alpha signal}:
+\begin{equation}
+signal_i = 0.50\, z_{sentiment} + 0.25\, z_{\Delta sentiment} + 0.25\, z_{novelty} - 0.25\, z_{risklang}
+\end{equation}
+with weights chosen by judgment rather than estimated or optimized. Within each calendar date on which at least four filings occur, filings are ranked by signal; the top quartile forms the long leg and the bottom quartile the short leg, and the long-short return is the average return of the long leg minus the average return of the short leg.
+
+\section{Results}
+
+\subsection{Regression}
+
+Table \ref{tab:regression} reports the cross-sectional regression. No coefficient is statistically distinguishable from zero at conventional levels, and the model explains almost none of the variation in five-day returns ($R^2 = 0.012$; adjusted $R^2 = -0.010$, i.e. no better than a model with no predictors at all once the loss of degrees of freedom is accounted for).
+
+\begin{table}[H]
+\centering
+\caption{Cross-Sectional Regression of Five-Day Forward Returns on Filing Text Features (HC3 standard errors, $N=230$)}
+\label{tab:regression}
+\begin{tabular}{lcc}
+\toprule
+& Coefficient & $p$-value \\
+\midrule
+Constant & 0.060 & 0.402 \\
+Sentiment score & $-0.044$ & 0.423 \\
+Sentiment change & 0.004 & 0.939 \\
+Novelty & $-0.008$ & 0.580 \\
+Risk language & 0.0001 & 0.976 \\
+Log word count & $-0.005$ & 0.508 \\
+\midrule
+$R^2$ & \multicolumn{2}{c}{0.012} \\
+Adjusted $R^2$ & \multicolumn{2}{c}{$-0.010$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure \ref{fig:scatter} shows the corresponding raw relationship between FinBERT sentiment and five-day forward returns: a visibly unstructured cloud of points, consistent with the regression's null result.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{figures/sentiment_vs_forward_return.png}
+\caption{Filing sentiment versus five-day forward return, all filings ($N=230$).}
+\label{fig:scatter}
+\end{figure}
+
+\subsection{Sentiment distribution and correlation structure}
+
+Figure \ref{fig:senthist} shows FinBERT sentiment scores are unimodal and roughly centered near zero, confirming the model is discriminating between filings rather than collapsing to a single score. Figure \ref{fig:corr} shows pairwise correlations between the text features and returns; every feature's correlation with $ret5d$ is small in magnitude (largest: $-0.07$ for sentiment score), consistent with the regression finding no explanatory power.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figures/sentiment_distribution.png}
+\caption{Distribution of FinBERT filing sentiment scores.}
+\label{fig:senthist}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figures/correlation_matrix.png}
+\caption{Correlation matrix of NLP signals and five-day forward returns.}
+\label{fig:corr}
+\end{figure}
+
+\subsection{Sentiment-sorted returns: a data-quality caveat}
+
+Figure \ref{fig:quintile} sorts filings into sentiment quintiles by calendar date and plots average forward returns per quintile. This chart should be read with an important caveat: the cross-sectional grouping is performed on the exact filing date, and the median number of filings sharing a date is one. As a result, \texttt{pandas.qcut} cannot form five genuine quantiles for most dates, and 152 of 230 observations (66\%) are dropped from this figure entirely; the remaining observations are concentrated in the two extreme bins rather than spread across all five. The figure is retained for transparency but should not be interpreted as a validated cross-sectional sort.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{figures/sentiment_quintiles.png}
+\caption{Average five-day return by sentiment quintile. See Section 5 for a caveat on how few filings this figure is effectively based on.}
+\label{fig:quintile}
+\end{figure}
+
+\subsection{Long-short portfolio}
+
+The long-short construction requires at least four filings on the same calendar date to form a tradable cross-section. This condition is met on exactly two dates in the full 2020--2026 sample (2026-04-30 and 2026-05-01), so the portfolio backtest consists of two return observations: $-1.22\%$ and $-5.01\%$, a mean event return of $-3.11\%$, a cumulative return of $-6.17\%$, and a maximum drawdown of $-5.01\%$ (Figures \ref{fig:perf} and \ref{fig:dd}). Given $N=2$, none of these figures should be interpreted as evidence of the strategy's performance in either direction; they are reported only because the pipeline produces them, not because they are statistically meaningful.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{figures/portfolio_performance.png}
+\caption{Long-short and long-only portfolio growth of \pounds1. Based on two portfolio observations; see Section 5.}
+\label{fig:perf}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{figures/portfolio_drawdown.png}
+\caption{Long-short portfolio drawdown. Based on two portfolio observations; see Section 5.}
+\label{fig:dd}
+\end{figure}
+
+\section{Limitations}
+
+Several limitations affect the interpretation of these results, and are separated here into a genuine finding (no relationship in the regression) and implementation issues that limit what the portfolio backtest and quintile sort can show.
+
+\textbf{Sample size.} At 230 filings across 19 tickers, the sample is small relative to what cross-sectional return regressions typically require to detect an effect of plausible economic magnitude, if one exists.
+
+\textbf{Cross-sectional grouping granularity.} Both the quintile sort (Section 4.3) and the long-short portfolio (Section 4.4) group filings by the exact calendar date. Because filing dates are scattered across the year for only 19 companies, most dates have only one filing, starving both analyses of same-day peers to rank against. This is an implementation choice, not a finding about the underlying hypothesis, and should be fixed (e.g. by grouping into weekly or monthly cross-sections) before either analysis is treated as informative.
+
+\textbf{Look-ahead bias in signal construction.} The z-scores underlying the composite alpha signal are computed using the mean and standard deviation of the entire 2020--2026 sample at once, so a filing from 2020 is standardized using information from 2026. A live trading signal would only have access to a rolling or expanding window of past data at the time of each trade.
+
+\textbf{Survivorship bias.} The ticker universe consists of large, currently-successful companies; firms that were delisted, acquired in distress, or went bankrupt over the sample period are absent by construction.
+
+\textbf{No trading frictions.} The backtest includes no transaction costs, bid-ask spread, or borrowing costs for the short leg, all of which would reduce any measured return.
+
+\section{Conclusion}
+
+This paper builds a full pipeline from raw SEC filing text to a text-based trading signal and tests it against short-term stock returns. The regression evidence is a clean null result: none of sentiment, sentiment change, risk language, or novelty explains five-day forward returns in this sample. The portfolio backtest, in contrast, is not informative in either direction, because the grouping rule used to form daily cross-sections leaves only two dates with enough filings to trade. Future work should regroup cross-sections at a coarser frequency, standardize signals using only point-in-time information, expand the filing sample by an order of magnitude, and evaluate any resulting signal on a held-out period not used to select feature weights, before drawing any conclusion about whether filing language has predictive content for this set of stocks.
+
+\begin{thebibliography}{9}
+
+\bibitem[Araci(2019)]{araci2019}
+Araci, D. (2019). FinBERT: Financial Sentiment Analysis with Pre-trained Language Models. \textit{arXiv preprint arXiv:1908.10063}.
+
+\bibitem[Loughran and McDonald(2011)]{loughranmcdonald2011}
+Loughran, T. and McDonald, B. (2011). When Is a Liability Not a Liability? Textual Analysis, Dictionaries, and 10-Ks. \textit{Journal of Finance}, 66(1), 35--65.
+
+\end{thebibliography}
+
+\end{document}
