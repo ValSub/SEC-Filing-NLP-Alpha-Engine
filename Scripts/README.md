@@ -1,6 +1,6 @@
 # SEC Filing NLP Alpha Engine
 
-A research prototype that asks: **can language extracted from SEC 10-K/10-Q filings using NLP help explain short-term stock returns?** This is a learning/research project, not a live trading system, and its own results are a documented null finding — see `main.tex` for the full write-up, including limitations.
+A research prototype that asks: **Can language extracted from SEC 10-K/10-Q filings using NLP help explain short-term stock returns?** This is a learning/research project, not a live trading system, and its own results are a documented null finding — see `main.tex` for the full write-up, including limitations.
 
 ## What's in this repo
 
@@ -27,7 +27,7 @@ A research prototype that asks: **can language extracted from SEC 10-K/10-Q fili
 - **Regression: no relationship found.** $R^2 = 0.012$; no feature (sentiment, sentiment change, risk language, novelty, or log word count) is statistically distinguishable from zero.
 - **Portfolio backtest: not statistically usable.** The cross-sectional grouping rule requires ≥4 filings on the exact same calendar date to form a long/short trade. Only 2 dates in the whole 2020–2026 sample meet that bar, so the "backtest" has only 2 return observations — nowhere near enough to draw a conclusion in either direction.
 
-## Known limitations (see `main.tex`, Section 5, for full detail)
+## Known limitations (refer to `main.tex`, Section 5, for full detail)
 
 - **Cross-sections are grouped by exact filing date**, which is too granular for only 19 tickers — this is what causes the tiny portfolio sample above, and also causes 66% of filings to be dropped from the sentiment-quintile chart.
 - **Look-ahead bias**: the z-scores used to build the trading signal are computed over the whole 2020–2026 sample at once, not a point-in-time rolling window.
@@ -41,10 +41,6 @@ A research prototype that asks: **can language extracted from SEC 10-K/10-Q fili
 2. Expand the ticker universe substantially and hold out a later time period as an out-of-sample test.
 3. Add a proper significance test (e.g. bootstrap) for the long-short spread, and annualize performance metrics correctly.
 
-## Requirements
-
-Run in Google Colab, or locally with: `transformers`, `torch`, `yfinance`, `beautifulsoup4`, `lxml`, `statsmodels`, `seaborn`, `pandas`, `numpy`, `matplotlib`.
-
 ## Disclaimer
 
-This is a university-style research prototype for learning purposes. It is not investment advice and is not a trading system.
+This is a research prototype for learning purposes. It is not investment advice and is not a trading system.
